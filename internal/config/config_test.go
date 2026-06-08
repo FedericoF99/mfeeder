@@ -1,0 +1,76 @@
+package config
+
+import (
+	"os"
+	"slices"
+	"strconv"
+	"strings"
+	"testing"
+)
+
+func TestDefaultConf(t *testing.T) {
+	t.Cleanup(func() {
+		os.Remove(filePath)
+	})
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Errorf("error loading config: %v", err)
+	}
+
+	for _, exc := range strings.Split(defaultExclusions, ",") {
+		if !slices.Contains(cfg.exclusions, exc) {
+			t.Errorf("exclusion %s not found in config", exc)
+		}
+	}
+
+	if cfg.includeSystem {
+		t.Errorf("system should not be included in config by default")
+	}
+}
+
+func TestFileConf(t *testing.T) {
+	createTempConf(t, "foo,bar", true)
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Errorf("error loading config: %v", err)
+	}
+
+	if !slices.Contains(cfg.exclusions, "foo") || !slices.Contains(cfg.exclusions, "bar") {
+		t.Errorf("exclusions not found in config: %v", cfg.exclusions)
+	}
+
+	if !cfg.IncludeSystem() {
+		t.Errorf("system should be true in this test")
+	}
+
+}
+
+func TestEmptyFileConf(t *testing.T) {
+	createTempConf(t, "", false)
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Errorf("error loading config: %v", err)
+	}
+
+	if len(cfg.exclusions) != 0 {
+		t.Errorf("exclusions should be empty in this test: %v", cfg.exclusions)
+	}
+
+	if cfg.IncludeSystem() {
+		t.Errorf("system should be false in this test")
+	}
+}
+
+func createTempConf(t *testing.T, exclusions string, system bool) {
+	dir := os.TempDir()
+	path := dir + "/" + filePath
+	err := os.WriteFile(path, []byte("EXCLUSIONS="+exclusions+"\nSYSTEM="+strconv.FormatBool(system)), 0644)
+	if err != nil {
+		t.Errorf("error creating test file: %v", err)
+	}
+	filePath = "/tmp/" + filePath
+	t.Cleanup(func() {
+		filePath = strings.TrimPrefix(filePath, "/tmp/")
+	})
+}

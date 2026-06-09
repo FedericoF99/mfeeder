@@ -3,6 +3,7 @@ package config
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"os"
 	"slices"
 	"strconv"
@@ -32,8 +33,8 @@ func (c *Conf) IncludeSystem() bool {
 /////
 
 // LoadConfig loads the config file or creates a default one
-func LoadConfig() (*Conf, error) {
-	if _, err := os.Stat(filePath); errors.Is(err, os.ErrNotExist) {
+func LoadConfig(ow bool) (*Conf, error) {
+	if _, err := os.Stat(filePath); errors.Is(err, os.ErrNotExist) && ow {
 		cfg, err := createDefault()
 		if err != nil {
 			return nil, err
@@ -89,10 +90,12 @@ func createDefault() (*Conf, error) {
 
 // RmExclusion removes an exclusion from the config file if it exists
 // and overwrites the file with the new exclusions
-func RmExclusion(exc string, cfg *Conf) error {
-	if cfg == nil {
-		return errors.New("no config found")
+func RmExclusion(exc string) error {
+	cfg, err := LoadConfig(false)
+	if err != nil {
+		return fmt.Errorf("error loading config: %v", err)
 	}
+
 	if cfg.exclusions == nil {
 		return errors.New("no exclusions found")
 	}
@@ -101,9 +104,9 @@ func RmExclusion(exc string, cfg *Conf) error {
 	}
 
 	excI := slices.Index(cfg.exclusions, exc)
-	slices.Delete(cfg.exclusions, excI, excI)
+	slices.Delete(cfg.exclusions, excI, excI+1)
 
-	err := overwriteConf(cfg)
+	err = overwriteConf(cfg)
 	if err != nil {
 		return err
 	}
@@ -113,10 +116,12 @@ func RmExclusion(exc string, cfg *Conf) error {
 
 // AddExclusion adds an exclusion from the config file if it doesn't exist
 // and overwrites the file with the new exclusions
-func AddExclusion(exc string, cfg *Conf) error {
-	if cfg == nil {
-		return errors.New("no config found")
+func AddExclusion(exc string) error {
+	cfg, err := LoadConfig(false)
+	if err != nil {
+		return fmt.Errorf("error loading config: %v", err)
 	}
+
 	if cfg.exclusions == nil {
 		return errors.New("no exclusions found")
 	}
@@ -126,7 +131,7 @@ func AddExclusion(exc string, cfg *Conf) error {
 
 	cfg.exclusions = append(cfg.exclusions, exc)
 
-	err := overwriteConf(cfg)
+	err = overwriteConf(cfg)
 	if err != nil {
 		return err
 	}
@@ -135,7 +140,12 @@ func AddExclusion(exc string, cfg *Conf) error {
 }
 
 // ToggleSystem toggles the includeSystem flag in the config and overwrites the file
-func ToggleSystem(cfg *Conf) error {
+func ToggleSystem() error {
+	cfg, err := LoadConfig(false)
+	if err != nil {
+		return fmt.Errorf("error loading config: %v", err)
+	}
+
 	cfg.includeSystem = !cfg.includeSystem
 	return overwriteConf(cfg)
 }
@@ -163,4 +173,22 @@ func overwriteConf(cfg *Conf) error {
 		return err
 	}
 	return nil
+}
+
+func GetExclusions() ([]string, error) {
+	cfg, err := LoadConfig(false)
+	if err != nil {
+		return nil, err
+	}
+
+	return cfg.exclusions, nil
+}
+
+func GetSystem() (bool, error) {
+	cfg, err := LoadConfig(false)
+	if err != nil {
+		return false, err
+	}
+
+	return cfg.includeSystem, nil
 }

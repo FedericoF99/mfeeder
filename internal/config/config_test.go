@@ -13,7 +13,7 @@ func TestDefaultConf(t *testing.T) {
 		os.Remove(filePath)
 	})
 
-	cfg, err := LoadConfig()
+	cfg, err := LoadConfig(true)
 	if err != nil {
 		t.Errorf("error loading config: %v", err)
 	}
@@ -31,7 +31,7 @@ func TestDefaultConf(t *testing.T) {
 
 func TestFileConf(t *testing.T) {
 	createTempConf(t, "foo,bar", true)
-	cfg, err := LoadConfig()
+	cfg, err := LoadConfig(true)
 	if err != nil {
 		t.Errorf("error loading config: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestFileConf(t *testing.T) {
 
 func TestEmptyFileConf(t *testing.T) {
 	createTempConf(t, "", false)
-	cfg, err := LoadConfig()
+	cfg, err := LoadConfig(true)
 	if err != nil {
 		t.Errorf("error loading config: %v", err)
 	}
@@ -59,6 +59,36 @@ func TestEmptyFileConf(t *testing.T) {
 
 	if cfg.IncludeSystem() {
 		t.Errorf("system should be false in this test")
+	}
+}
+
+func TestRmExclusion(t *testing.T) {
+	createTempConf(t, "foo,bar", true)
+	err := RmExclusion("foo")
+	if err != nil {
+		t.Errorf("error removing exclusion: %v", err)
+	}
+	cfg, err := LoadConfig(true)
+	if err != nil {
+		t.Errorf("error loading config: %v", err)
+	}
+	if slices.Contains(cfg.exclusions, "foo") {
+		t.Errorf("remove exclusion failed")
+	}
+}
+
+func TestAddExclusion(t *testing.T) {
+	createTempConf(t, "foo,bar", true)
+	err := AddExclusion("go")
+	if err != nil {
+		t.Errorf("error adding exclusion: %v", err)
+	}
+	cfg, err := LoadConfig(true)
+	if err != nil {
+		t.Errorf("error loading config: %v", err)
+	}
+	if !slices.Contains(cfg.exclusions, "go") {
+		t.Errorf("add exclusion failed")
 	}
 }
 

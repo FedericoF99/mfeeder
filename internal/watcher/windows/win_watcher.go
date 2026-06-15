@@ -7,6 +7,7 @@ import (
 	"log"
 	"mfeeder/internal/config"
 	"mfeeder/internal/watcher/core"
+	"runtime"
 	"slices"
 	"syscall"
 	"unsafe"
@@ -85,7 +86,7 @@ func (w WinWatcher) Watch(ctx context.Context) (<-chan core.WindowEvent, error) 
 					continue
 				}
 
-				if err != nil {
+				if err == nil {
 					ch <- core.WindowEvent{
 						Window:      window,
 						WindowEvent: raw.event,
@@ -95,24 +96,28 @@ func (w WinWatcher) Watch(ctx context.Context) (<-chan core.WindowEvent, error) 
 		}
 	}()
 
-	cb := eventHookCallback(chRaw)
+	go func() {
+		runtime.LockOSThread()
+		cb := eventHookCallback(chRaw)
 
-	foregroundEvHook, _, _ := setWinEventHook.Call(uintptr(EventSystemForeground), uintptr(EventSystemForeground), uintptr(0), cb, 0, 0, uintptr(0|2))
-	minimizedEvHook, _, _ := setWinEventHook.Call(uintptr(EventSystemMinimizeStart), uintptr(EventSystemMinimizeEnd), uintptr(0), cb, 0, 0, uintptr(0|2))
-	objectEvHook, _, _ := setWinEventHook.Call(uintptr(EventObjectCreate), uintptr(EventObjectHide), uintptr(0), cb, 0, 0, uintptr(0|2))
+		foregroundEvHook, _, _ := setWinEventHook.Call(uintptr(EventSystemForeground), uintptr(EventSystemForeground), uintptr(0), cb, 0, 0, uintptr(0|2))
+		minimizedEvHook, _, _ := setWinEventHook.Call(uintptr(EventSystemMinimizeStart), uintptr(EventSystemMinimizeEnd), uintptr(0), cb, 0, 0, uintptr(0|2))
+		objectEvHook, _, _ := setWinEventHook.Call(uintptr(EventObjectCreate), uintptr(EventObjectHide), uintptr(0), cb, 0, 0, uintptr(0|2))
 
-	var msg MSG
-	for ctx.Err() == nil {
-		ret, _, _ := procGetMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
+		var msg MSG
+		for ctx.Err() == nil {
+			ret, _, _ := procGetMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
 
-		if int32(ret) <= 0 {
-			break
+			if int32(ret) <= 0 {
+				break
+			}
 		}
-	}
 
-	_, _, _ = procUnhookWinEvent.Call(foregroundEvHook)
-	_, _, _ = procUnhookWinEvent.Call(minimizedEvHook)
-	_, _, _ = procUnhookWinEvent.Call(objectEvHook)
+		_, _, _ = procUnhookWinEvent.Call(foregroundEvHook)
+		_, _, _ = procUnhookWinEvent.Call(minimizedEvHook)
+		_, _, _ = procUnhookWinEvent.Call(objectEvHook)
+		runtime.UnlockOSThread()
+	}()
 
 	return ch, nil
 }

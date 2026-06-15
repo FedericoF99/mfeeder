@@ -1,8 +1,7 @@
-package watcher
+package core
 
 import (
 	"context"
-	"mfeeder/internal/config"
 )
 
 type Window struct {
@@ -17,7 +16,6 @@ type WindowEventType string
 const (
 	WindowOpened  WindowEventType = "WINDOW_OPENED"
 	WindowClosed  WindowEventType = "WINDOW_CLOSED"
-	WindowUpdated WindowEventType = "WINDOW_UPDATED"
 	WindowFocused WindowEventType = "WINDOW_FOCUSED"
 )
 
@@ -27,11 +25,7 @@ type WindowEvent struct {
 }
 
 type Watcher interface {
-	Snapshot(ctx context.Context, c *config.Conf) ([]Window, error)
+	Snapshot(ctx context.Context) ([]Window, error)
 	Watch(ctx context.Context) (<-chan WindowEvent, error)
 	Close() error
-}
-
-func NewWatcher() Watcher {
-	return newWatcher()
 }

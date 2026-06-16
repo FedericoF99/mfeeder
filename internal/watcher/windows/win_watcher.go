@@ -101,7 +101,7 @@ func (w WinWatcher) Watch(ctx context.Context) (<-chan core.WindowEvent, error) 
 		objectEvHook, _, _ := setWinEventHook.Call(uintptr(EventObjectCreate), uintptr(EventObjectHide), uintptr(0), cb, 0, 0, uintptr(0|2))
 
 		var msg MSG
-		for ctx.Err() == nil {
+		for !ctx.Done() {
 			ret, _, _ := procGetMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
 
 			if int32(ret) <= 0 {

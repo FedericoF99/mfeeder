@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"mfeeder/internal/config"
+	"mfeeder/internal/sqlite"
+	"mfeeder/internal/watcher/core"
 	"mfeeder/internal/watcher/factory"
 )
 
@@ -16,7 +17,7 @@ func main() {
 
 	watcher := factory.NewWatcher(cfg)
 
-	ctx := context.Background()
+	ctx, _ := context.WithCancel(context.Background())
 	_, err = watcher.Snapshot(ctx)
 	if err != nil {
 		log.Fatal(err)
@@ -30,7 +31,14 @@ func main() {
 	for {
 		select {
 		case event := <-ch:
-			fmt.Printf("%s - %s\n", event.Window.Exe, event.WindowEvent)
+			switch event.WindowEvent {
+			case core.WindowOpened:
+				sqlite.WindowOpened(event.Window)
+			case core.WindowClosed:
+				sqlite.WindowClosed(event.Window)
+			case core.WindowFocused:
+				sqlite.WindowFocused(event.Window)
+			}
 		}
 	}
 }

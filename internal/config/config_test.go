@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -23,14 +22,10 @@ func TestDefaultConf(t *testing.T) {
 			t.Errorf("exclusion %s not found in config", exc)
 		}
 	}
-
-	if cfg.includeSystem {
-		t.Errorf("system should not be included in config by default")
-	}
 }
 
 func TestFileConf(t *testing.T) {
-	createTempConf(t, "foo,bar", true)
+	createTempConf(t, "foo,bar")
 	cfg, err := LoadConfig(true)
 	if err != nil {
 		t.Errorf("error loading config: %v", err)
@@ -39,15 +34,10 @@ func TestFileConf(t *testing.T) {
 	if !slices.Contains(cfg.exclusions, "foo") || !slices.Contains(cfg.exclusions, "bar") {
 		t.Errorf("exclusions not found in config: %v", cfg.exclusions)
 	}
-
-	if !cfg.IncludeSystem() {
-		t.Errorf("system should be true in this test")
-	}
-
 }
 
 func TestEmptyFileConf(t *testing.T) {
-	createTempConf(t, "", false)
+	createTempConf(t, "")
 	cfg, err := LoadConfig(true)
 	if err != nil {
 		t.Errorf("error loading config: %v", err)
@@ -56,14 +46,10 @@ func TestEmptyFileConf(t *testing.T) {
 	if len(cfg.exclusions) != 0 {
 		t.Errorf("exclusions should be empty in this test: %v", cfg.exclusions)
 	}
-
-	if cfg.IncludeSystem() {
-		t.Errorf("system should be false in this test")
-	}
 }
 
 func TestRmExclusion(t *testing.T) {
-	createTempConf(t, "foo,bar", true)
+	createTempConf(t, "foo,bar")
 	err := RmExclusion("foo")
 	if err != nil {
 		t.Errorf("error removing exclusion: %v", err)
@@ -78,7 +64,7 @@ func TestRmExclusion(t *testing.T) {
 }
 
 func TestAddExclusion(t *testing.T) {
-	createTempConf(t, "foo,bar", true)
+	createTempConf(t, "foo,bar")
 	err := AddExclusion("go")
 	if err != nil {
 		t.Errorf("error adding exclusion: %v", err)
@@ -92,10 +78,10 @@ func TestAddExclusion(t *testing.T) {
 	}
 }
 
-func createTempConf(t *testing.T, exclusions string, system bool) {
+func createTempConf(t *testing.T, exclusions string) {
 	dir := os.TempDir()
 	path := dir + "/" + filePath
-	err := os.WriteFile(path, []byte("EXCLUSIONS="+exclusions+"\nSYSTEM="+strconv.FormatBool(system)), 0644)
+	err := os.WriteFile(path, []byte("EXCLUSIONS="+exclusions+"\n"), 0644)
 	if err != nil {
 		t.Errorf("error creating test file: %v", err)
 	}

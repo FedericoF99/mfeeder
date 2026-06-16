@@ -29,8 +29,6 @@ func parseCmd(args []string) (*cmd, error) {
 		err = validateDay(args, &c)
 	case "ex":
 		err = validateEx(args, &c)
-	case "system":
-		err = validateSystem(args, &c)
 	case "get":
 		err = validateGet(args, &c)
 	case "--help":
@@ -84,15 +82,6 @@ func validateEx(args []string, c *cmd) error {
 	return nil
 }
 
-func validateSystem(args []string, c *cmd) error {
-	if len(args) > 2 {
-		return fmt.Errorf("unexpected arguments for system command, try: mfeeder --help")
-	}
-
-	c.cmd = "sys"
-	return nil
-}
-
 func validateGet(args []string, c *cmd) error {
 	aLen := len(args)
 
@@ -103,7 +92,7 @@ func validateGet(args []string, c *cmd) error {
 		return fmt.Errorf("unexpected arguments for get command, try: mfeeder --help")
 	}
 
-	if args[2] != "ex" && args[2] != "sys" {
+	if args[2] != "ex" {
 		return fmt.Errorf("invalid option for get command, try: mfeeder --help")
 	}
 

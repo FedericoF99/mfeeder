@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"mfeeder/internal/config"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -28,8 +27,6 @@ func run(c *cmd) error {
 		return runDay(c)
 	case "ex":
 		return runEx(c)
-	case "sys":
-		return runSys()
 	case "get":
 		return runGet(c)
 	case "help":
@@ -56,11 +53,6 @@ func runEx(c *cmd) error {
 	return err
 }
 
-func runSys() error {
-	err := config.ToggleSystem()
-	return err
-}
-
 func runGet(c *cmd) error {
 	if c.args[0] == "ex" {
 		ex, err := config.GetExclusions()
@@ -68,13 +60,6 @@ func runGet(c *cmd) error {
 			return err
 		}
 		fmt.Printf("EXCLUSIONS=%s\n", strings.Join(ex, ", "))
-		return nil
-	} else if c.args[0] == "sys" {
-		sys, err := config.GetSystem()
-		if err != nil {
-			return err
-		}
-		fmt.Printf("SYSTEM=%s\n", strconv.FormatBool(sys))
 		return nil
 	}
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"slices"
-	"strconv"
 	"strings"
 )
 
@@ -16,18 +15,13 @@ var (
 )
 
 type Conf struct {
-	exclusions    []string
-	includeSystem bool
+	exclusions []string
 }
 
 ///// Conf methods
 
 func (c *Conf) Exclusions() []string {
 	return c.exclusions
-}
-
-func (c *Conf) IncludeSystem() bool {
-	return c.includeSystem
 }
 
 /////
@@ -62,8 +56,6 @@ func LoadConfig(ow bool) (*Conf, error) {
 			if trimmed != "" {
 				cfg.exclusions = strings.Split(trimmed, ",")
 			}
-		} else if strings.HasPrefix(line, "SYSTEM=") {
-			cfg.includeSystem = strings.TrimPrefix(line, "SYSTEM=") == "true"
 		}
 	}
 
@@ -76,11 +68,10 @@ func LoadConfig(ow bool) (*Conf, error) {
 
 func createDefault() (*Conf, error) {
 	cfg := Conf{
-		exclusions:    strings.Split(defaultExclusions, ","),
-		includeSystem: false,
+		exclusions: strings.Split(defaultExclusions, ","),
 	}
 
-	err := os.WriteFile(filePath, []byte("EXCLUSIONS="+defaultExclusions+"\nSYSTEM=false\n"), 0644)
+	err := os.WriteFile(filePath, []byte("EXCLUSIONS="+defaultExclusions+"\n"), 0644)
 	if err != nil {
 		return nil, err
 	}
@@ -139,17 +130,6 @@ func AddExclusion(exc string) error {
 	return nil
 }
 
-// ToggleSystem toggles the includeSystem flag in the config and overwrites the file
-func ToggleSystem() error {
-	cfg, err := LoadConfig(false)
-	if err != nil {
-		return fmt.Errorf("error loading config: %v", err)
-	}
-
-	cfg.includeSystem = !cfg.includeSystem
-	return overwriteConf(cfg)
-}
-
 func overwriteConf(cfg *Conf) error {
 	file, err := os.ReadFile(filePath)
 	if err != nil {
@@ -163,8 +143,6 @@ func overwriteConf(cfg *Conf) error {
 
 		if strings.HasPrefix(line, "EXCLUSIONS=") {
 			lines[i] = "EXCLUSIONS=" + strings.Join(cfg.exclusions, ",")
-		} else if strings.HasPrefix(line, "SYSTEM=") {
-			lines[i] = "SYSTEM=" + strconv.FormatBool(cfg.includeSystem)
 		}
 	}
 
@@ -182,13 +160,4 @@ func GetExclusions() ([]string, error) {
 	}
 
 	return cfg.exclusions, nil
-}
-
-func GetSystem() (bool, error) {
-	cfg, err := LoadConfig(false)
-	if err != nil {
-		return false, err
-	}
-
-	return cfg.includeSystem, nil
 }

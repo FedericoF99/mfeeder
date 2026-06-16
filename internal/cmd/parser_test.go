@@ -77,24 +77,6 @@ func TestValidateEx(t *testing.T) {
 	}
 }
 
-func TestValidateSystem(t *testing.T) {
-	t.Parallel()
-	c := initCmd()
-	err := validateSystem([]string{"mfeeder", "sys", "try"}, &c)
-	if err == nil {
-		t.Errorf("validateSystem should fail with invalid args")
-	}
-
-	err = validateSystem([]string{"mfeeder", "sys"}, &c)
-	if err != nil {
-		t.Errorf("validateSystem should not fail with valid args")
-	}
-
-	if c.cmd != "sys" {
-		t.Errorf("validateSystem should set cmd to sys")
-	}
-}
-
 func TestValidateGet(t *testing.T) {
 	t.Parallel()
 	c := initCmd()

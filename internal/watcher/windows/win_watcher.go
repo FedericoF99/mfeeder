@@ -35,10 +35,6 @@ type WinWatcher struct {
 	cfg *config.Conf
 }
 
-func NewWatcher(c *config.Conf) WinWatcher {
-	return WinWatcher{cfg: c}
-}
-
 func (w WinWatcher) Snapshot(ctx context.Context) ([]core.Window, error) {
 
 	info := make([]core.Window, 0)

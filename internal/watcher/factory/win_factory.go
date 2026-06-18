@@ -5,8 +5,9 @@ package factory
 import (
 	"mfeeder/internal/config"
 	"mfeeder/internal/watcher/core"
+	"mfeeder/internal/watcher/windows"
 )
 
 func newWatcher(c *config.Conf) core.Watcher {
-	return WinWatcher{cfg: c}
+	return &windows.WinWatcher{Cfg: c}
 }

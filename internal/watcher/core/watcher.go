@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"mfeeder/internal/shutdown"
 )
 
 type Window struct {
@@ -26,6 +27,6 @@ type WindowEvent struct {
 
 type Watcher interface {
 	Snapshot(ctx context.Context) ([]Window, error)
-	Watch(ctx context.Context) (<-chan WindowEvent, error)
-	Close() error
+	Watch(sdManager *shutdown.Manager) (<-chan WindowEvent, error)
+	Close(sdManager *shutdown.Manager)
 }

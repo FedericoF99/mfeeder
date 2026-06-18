@@ -4,8 +4,7 @@ import (
 	"context"
 	"log"
 	"mfeeder/internal/config"
-	"mfeeder/internal/sqlite"
-	"mfeeder/internal/watcher/core"
+	"mfeeder/internal/shutdown"
 	"mfeeder/internal/watcher/factory"
 )
 
@@ -17,27 +16,37 @@ func main() {
 
 	watcher := factory.NewWatcher(cfg)
 
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 	_, err = watcher.Snapshot(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	ch, err := watcher.Watch(ctx)
+	sdManager := shutdown.Manager{Cancel: cancel}
+
+	ch, err := watcher.Watch(&sdManager)
 	if err != nil {
-		return
+		log.Fatal(err)
 	}
+
+	defer func() {
+		// todo: save state
+	}()
 
 	for {
 		select {
+		case <-ctx.Done():
+			watcher.Close(&sdManager)
+			return
 		case event := <-ch:
+			println(event.WindowEvent, event.Window.Title)
 			switch event.WindowEvent {
-			case core.WindowOpened:
-				sqlite.WindowOpened(event.Window)
-			case core.WindowClosed:
-				sqlite.WindowClosed(event.Window)
-			case core.WindowFocused:
-				sqlite.WindowFocused(event.Window)
+			//case core.WindowOpened:
+			//	sqlite.WindowOpened(event.Window)
+			//case core.WindowClosed:
+			//	sqlite.WindowClosed(event.Window)
+			//case core.WindowFocused:
+			//	sqlite.WindowFocused(event.Window)
 			}
 		}
 	}

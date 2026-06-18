@@ -3,55 +3,12 @@
 package windows
 
 import (
-	"fmt"
-	"mfeeder/internal/config"
 	"mfeeder/internal/watcher/core"
-	"slices"
 	"strings"
-	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
-
-var (
-	user32                   = syscall.NewLazyDLL("User32.dll")
-	enumWindows              = user32.NewProc("EnumWindows")
-	getWindowThreadProcessId = user32.NewProc("GetWindowThreadProcessId")
-	isWindowVisible          = user32.NewProc("IsWindowVisible")
-	getForegroundWindow      = user32.NewProc("GetForegroundWindow")
-	getWindowTextW           = user32.NewProc("GetWindowTextW")
-	isIconic                 = user32.NewProc("IsIconic")
-	getWindow                = user32.NewProc("GetWindow")
-	getWindowLongPtrW        = user32.NewProc("GetWindowLongPtrW")
-	setWinEventHook          = user32.NewProc("SetWinEventHook")
-	procUnhookWinEvent       = user32.NewProc("UnhookWinEvent")
-	procGetMessage           = user32.NewProc("GetMessageW")
-	getClassNameW            = user32.NewProc("GetClassNameW")
-
-	kernel32                  = syscall.NewLazyDLL("Kernel32.dll")
-	openProcess               = kernel32.NewProc("OpenProcess")
-	queryFullProcessImageName = kernel32.NewProc("QueryFullProcessImageNameW")
-	procCloseHandle           = kernel32.NewProc("CloseHandle")
-
-	dwmapi                = syscall.NewLazyDLL("Dwmapi.dll")
-	dwmGetWindowAttribute = dwmapi.NewProc("DwmGetWindowAttribute")
-)
-
-type POINT struct {
-	X int32
-	Y int32
-}
-
-type MSG struct {
-	Hwnd     uintptr
-	Message  uint32
-	WParam   uintptr
-	LParam   uintptr
-	Time     uint32
-	Pt       POINT
-	LPrivate uint32
-}
 
 func isOpenedWindow(hwnd uintptr) bool {
 	isVisible, _, _ := isWindowVisible.Call(hwnd)
@@ -69,14 +26,17 @@ func isOpenedWindow(hwnd uintptr) bool {
 
 func isAppWindow(hwnd uintptr) bool {
 	var clocked int32 = 0
-	_, _, _ = dwmGetWindowAttribute.Call(hwnd, uintptr(14), uintptr(unsafe.Pointer(&clocked)), unsafe.Sizeof(clocked))
+	ret, _, _ := dwmGetWindowAttribute.Call(hwnd, uintptr(14), uintptr(unsafe.Pointer(&clocked)), unsafe.Sizeof(clocked))
+	if ret != 0 {
+		return false
+	}
 
 	if clocked != 0 {
 		return false
 	}
 
 	exStyle, _, _ := getWindowLongPtrW.Call(hwnd, ^uintptr(19))
-	if exStyle&0x00000080 != 0 {
+	if exStyle&0x00000080 != 0 || exStyle == 0 {
 		return false
 	}
 
@@ -88,19 +48,21 @@ func isAppWindow(hwnd uintptr) bool {
 	return true
 }
 
-func getWindowInfo(hwnd uintptr, fHwnd uintptr, c *config.Conf) (core.Window, error) {
-	pid := getPid(hwnd)
+func getWindowInfo(hwnd uintptr, fHwnd uintptr) (core.Window, error) {
+	pid, err := getPid(hwnd)
+	if err != nil {
+		return core.Window{}, err
+	}
 
-	proc, _, _ := openProcess.Call(access, 0, uintptr(pid))
+	proc, _, err := openProcess.Call(access, 0, uintptr(pid))
 	if proc == 0 {
-		return core.Window{}, fmt.Errorf("failed to open process")
+		return core.Window{}, err
 	}
 	defer procCloseHandle.Call(proc)
 
-	exeName := getExeName(proc)
-
-	if slices.Contains(c.Exclusions(), exeName) {
-		return core.Window{}, fmt.Errorf("window excluded")
+	exeName, err := getExeName(proc)
+	if err != nil {
+		return core.Window{}, err
 	}
 
 	windowTitle := getWindowTitle(hwnd)
@@ -115,16 +77,22 @@ func getWindowInfo(hwnd uintptr, fHwnd uintptr, c *config.Conf) (core.Window, er
 	return window, nil
 }
 
-func getPid(hwnd uintptr) int32 {
+func getPid(hwnd uintptr) (int32, error) {
 	var pid int32 = 0
-	_, _, _ = getWindowThreadProcessId.Call(hwnd, uintptr(unsafe.Pointer(&pid)))
-	return pid
+	ret, _, err := getWindowThreadProcessId.Call(hwnd, uintptr(unsafe.Pointer(&pid)))
+	if ret == 0 {
+		return pid, err
+	}
+	return pid, nil
 }
 
-func getExeName(proc uintptr) string {
+func getExeName(proc uintptr) (string, error) {
 	eName := make([]uint16, 256)
 	eNameLen := uint32(len(eName))
-	_, _, _ = queryFullProcessImageName.Call(proc, 0, uintptr(unsafe.Pointer(&eName[0])), uintptr(unsafe.Pointer(&eNameLen)))
+	ret, _, err := queryFullProcessImageName.Call(proc, 0, uintptr(unsafe.Pointer(&eName[0])), uintptr(unsafe.Pointer(&eNameLen)))
+	if ret == 0 {
+		return "", err
+	}
 
 	name := windows.UTF16ToString(eName)
 	i := strings.LastIndex(name, "\\")
@@ -132,7 +100,7 @@ func getExeName(proc uintptr) string {
 		name = name[i+1:]
 	}
 
-	return strings.TrimSuffix(name, ".exe")
+	return strings.TrimSuffix(name, ".exe"), nil
 }
 
 func getWindowTitle(hwnd uintptr) string {
@@ -146,9 +114,12 @@ func getForegroundHandle() uintptr {
 	return fHwnd
 }
 
-func getClassName(hwnd uintptr) string {
+func getClassName(hwnd uintptr) (string, error) {
 	wName := make([]uint16, 256)
-	_, _, _ = getClassNameW.Call(hwnd, uintptr(unsafe.Pointer(&wName[0])), uintptr(len(wName)))
-	return windows.UTF16ToString(wName)
+	ret, _, err := getClassNameW.Call(hwnd, uintptr(unsafe.Pointer(&wName[0])), uintptr(len(wName)))
+	if int32(ret) == 0 {
+		return "", err
+	}
+	return windows.UTF16ToString(wName), nil
 
 }

@@ -6,24 +6,13 @@ import (
 	"context"
 	"log"
 	"mfeeder/internal/config"
+	"mfeeder/internal/shutdown"
 	"mfeeder/internal/watcher/core"
 	"runtime"
 	"slices"
+	"sync"
 	"syscall"
 	"unsafe"
-)
-
-const (
-	access = 0x1000
-
-	EventSystemForeground    uint32 = 0x0003
-	EventSystemMinimizeStart uint32 = 0x0016
-	EventSystemMinimizeEnd   uint32 = 0x0017
-
-	EventObjectCreate  uint32 = 0x8000
-	EventObjectDestroy uint32 = 0x8001
-	EventObjectShow    uint32 = 0x8002
-	EventObjectHide    uint32 = 0x8003
 )
 
 type RawWindowsEvent struct {
@@ -32,16 +21,18 @@ type RawWindowsEvent struct {
 }
 
 type WinWatcher struct {
-	cfg *config.Conf
+	Cfg  *config.Conf
+	WG   sync.WaitGroup
+	hwnd uintptr
 }
 
-func (w WinWatcher) Snapshot(ctx context.Context) ([]core.Window, error) {
+func (w *WinWatcher) Snapshot(ctx context.Context) ([]core.Window, error) {
 
 	info := make([]core.Window, 0)
 	infoPtr := unsafe.Pointer(&info)
 	lParam := uintptr(infoPtr)
 
-	cb := enumWindowsCallback(ctx, w.cfg)
+	cb := enumWindowsCallback(ctx, w.Cfg)
 	res, _, err := enumWindows.Call(cb, lParam)
 
 	if res != 0 {
@@ -51,76 +42,33 @@ func (w WinWatcher) Snapshot(ctx context.Context) ([]core.Window, error) {
 	return info, err
 }
 
-func (w WinWatcher) Watch(ctx context.Context) (<-chan core.WindowEvent, error) {
+func (w *WinWatcher) Watch(sdManager *shutdown.Manager) (<-chan core.WindowEvent, error) {
 
-	ch := make(chan core.WindowEvent)
-	chRaw := make(chan RawWindowsEvent)
+	ch := make(chan core.WindowEvent, 50)
+	chRaw := make(chan RawWindowsEvent, 50)
+	ready := make(chan error, 1)
 
+	w.WG.Add(2)
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-
-			case raw, ok := <-chRaw:
-				if !ok {
-					return
-				}
-
-				fHwnd := getForegroundHandle()
-				window, err := getWindowInfo(raw.hwnd, fHwnd, w.cfg)
-				if window.Title == "" {
-					continue
-				}
-
-				if slices.Contains(w.cfg.Exclusions(), window.Exe) {
-					continue
-				}
-
-				class := getClassName(raw.hwnd)
-				if slices.Contains(w.cfg.Exclusions(), class) {
-					continue
-				}
-
-				if err == nil {
-					ch <- core.WindowEvent{
-						Window:      window,
-						WindowEvent: raw.event,
-					}
-				}
-			}
-		}
+		defer w.WG.Done()
+		defer close(ch)
+		w.eventLoop(ch, chRaw)
 	}()
 
 	go func() {
-		runtime.LockOSThread()
-		cb := eventHookCallback(chRaw)
-
-		foregroundEvHook, _, _ := setWinEventHook.Call(uintptr(EventSystemForeground), uintptr(EventSystemForeground), uintptr(0), cb, 0, 0, uintptr(0|2))
-		minimizedEvHook, _, _ := setWinEventHook.Call(uintptr(EventSystemMinimizeStart), uintptr(EventSystemMinimizeEnd), uintptr(0), cb, 0, 0, uintptr(0|2))
-		objectEvHook, _, _ := setWinEventHook.Call(uintptr(EventObjectCreate), uintptr(EventObjectHide), uintptr(0), cb, 0, 0, uintptr(0|2))
-
-		var msg MSG
-		for !ctx.Done() {
-			ret, _, _ := procGetMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
-
-			if int32(ret) <= 0 {
-				break
-			}
-		}
-
-		_, _, _ = procUnhookWinEvent.Call(foregroundEvHook)
-		_, _, _ = procUnhookWinEvent.Call(minimizedEvHook)
-		_, _, _ = procUnhookWinEvent.Call(objectEvHook)
-		runtime.UnlockOSThread()
+		defer w.WG.Done()
+		defer close(chRaw)
+		w.winMessageLoop(sdManager, chRaw, ready)
 	}()
 
-	return ch, nil
+	err := <-ready
+	close(ready)
+	return ch, err
 }
 
-func (w WinWatcher) Close() error {
-	//TODO implement me
-	panic("implement me")
+func (w *WinWatcher) Close(sdManager *shutdown.Manager) {
+	sdManager.Shutdown()
+	w.WG.Wait()
 }
 
 // hwnd is a window handle (basically a pointer to the window)
@@ -130,7 +78,6 @@ func enumWindowsCallback(ctx context.Context, c *config.Conf) uintptr {
 
 	return syscall.NewCallback(func(hwnd uintptr, lParam uintptr) uintptr {
 		if ctx.Err() != nil {
-			log.Println("stopping enum window callback because context done")
 			return 0
 		}
 
@@ -138,9 +85,9 @@ func enumWindowsCallback(ctx context.Context, c *config.Conf) uintptr {
 			return 1
 		}
 
-		window, err := getWindowInfo(hwnd, fHwnd, c)
+		window, err := getWindowInfo(hwnd, fHwnd)
 		if err != nil {
-			return 0
+			return 1
 		}
 
 		info := (*[]core.Window)(unsafe.Pointer(lParam))
@@ -193,8 +140,175 @@ func eventHookCallback(chRaw chan<- RawWindowsEvent) uintptr {
 			return 0
 		}
 
-		chRaw <- RawWindowsEvent{hwnd: hwnd, event: windowEvent}
+		select {
+		case chRaw <- RawWindowsEvent{hwnd: hwnd, event: windowEvent}:
+		default:
+			// drop event
+		}
 
 		return 0
+	})
+}
+
+func (w *WinWatcher) eventLoop(ch chan<- core.WindowEvent, chRaw <-chan RawWindowsEvent) {
+	for {
+		select {
+		case raw, ok := <-chRaw:
+			if !ok {
+				println("event loop stopped")
+				return
+			}
+
+			fHwnd := getForegroundHandle()
+			window, err := getWindowInfo(raw.hwnd, fHwnd)
+			if window.Title == "" {
+				continue
+			}
+			if err != nil {
+				continue
+			}
+
+			if slices.Contains(w.Cfg.Exclusions(), window.Exe) {
+				continue
+			}
+
+			class, err := getClassName(raw.hwnd)
+			if err != nil {
+				continue
+			}
+
+			if slices.Contains(w.Cfg.Exclusions(), class) {
+				continue
+			}
+
+			if err == nil {
+				ch <- core.WindowEvent{
+					Window:      window,
+					WindowEvent: raw.event,
+				}
+			}
+		}
+	}
+}
+
+func (w *WinWatcher) winMessageLoop(sdManager *shutdown.Manager, chRaw chan<- RawWindowsEvent, ready chan<- error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	cb := eventHookCallback(chRaw)
+
+	hwnd, err := createHiddenWindow(sdManager)
+	if err != nil {
+		ready <- err
+		return
+	}
+
+	w.hwnd = hwnd
+
+	foregroundEvHook, _, err := setWinEventHook.Call(uintptr(EventSystemForeground), uintptr(EventSystemForeground), uintptr(0), cb, 0, 0, uintptr(0|2))
+	if foregroundEvHook == 0 {
+		ready <- err
+		return
+	}
+	defer func() { _, _, _ = procUnhookWinEvent.Call(foregroundEvHook) }()
+
+	minimizedEvHook, _, err := setWinEventHook.Call(uintptr(EventSystemMinimizeStart), uintptr(EventSystemMinimizeEnd), uintptr(0), cb, 0, 0, uintptr(0|2))
+	if minimizedEvHook == 0 {
+		ready <- err
+		return
+	}
+	defer func() { _, _, _ = procUnhookWinEvent.Call(minimizedEvHook) }()
+
+	objectEvHook, _, err := setWinEventHook.Call(uintptr(EventObjectCreate), uintptr(EventObjectHide), uintptr(0), cb, 0, 0, uintptr(0|2))
+	if objectEvHook == 0 {
+		ready <- err
+		return
+	}
+	defer func() { _, _, _ = procUnhookWinEvent.Call(objectEvHook) }()
+
+	ready <- nil
+
+	var m msg
+	for {
+		mPtr := uintptr(unsafe.Pointer(&m))
+		ret, _, _ := procGetMessage.Call(mPtr, 0, 0, 0)
+
+		if ret < 0 {
+			log.Println("procGetMessage failed")
+			sdManager.Shutdown()
+			return
+		}
+		if ret == 0 {
+			println("message loop stopped")
+			break
+		}
+
+		_, _, _ = translateMessage.Call(mPtr)
+		_, _, _ = dispatchMessageW.Call(mPtr)
+	}
+}
+
+func createHiddenWindow(sdManager *shutdown.Manager) (uintptr, error) {
+	// handle to the current module
+	hInstance, _, err := getModuleHandleW.Call(0)
+	if hInstance == 0 {
+		return 0, err
+	}
+
+	windowName, err := syscall.UTF16PtrFromString("MFeeder Hidden Window")
+	if err != nil {
+		return 0, err
+	}
+
+	className, err := syscall.UTF16PtrFromString("MFeederClass")
+	if err != nil {
+		return 0, err
+	}
+
+	wProc := windowProcCallback(sdManager)
+
+	w := wndclassex{
+		size:      uint32(unsafe.Sizeof(wndclassex{})),
+		wndProc:   wProc,
+		instance:  hInstance,
+		className: className,
+	}
+
+	atom, _, err := registerClassExW.Call(uintptr(unsafe.Pointer(&w)))
+	if atom == 0 {
+		return 0, err
+	}
+
+	hwnd, _, err := createWindowExW.Call(0, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(windowName)),
+		uintptr(WsOverlapped), 0, 0, 0, 0, 0, 0, hInstance, 0)
+
+	if hwnd == 0 {
+		return 0, err
+	}
+
+	return hwnd, nil
+}
+
+func windowProcCallback(sdManager *shutdown.Manager) uintptr {
+	return syscall.NewCallback(func(hwnd uintptr, msg uint32, wParam uintptr, lParam uintptr) uintptr {
+		switch msg {
+		case WmClose:
+			sdManager.Shutdown()
+			_, _, _ = postQuitMessage.Call(0)
+			return 0
+		case WmEndsession:
+			if wParam != 0 {
+				sdManager.Shutdown()
+				_, _, _ = postQuitMessage.Call(0)
+			}
+			return 0
+		case WmDestroy:
+			sdManager.Shutdown()
+			_, _, _ = postQuitMessage.Call(0)
+			return 0
+		}
+
+		ret, _, _ := defWindowProcW.Call(hwnd, uintptr(msg), wParam, lParam)
+		return ret
 	})
 }

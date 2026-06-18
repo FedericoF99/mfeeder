@@ -68,6 +68,11 @@ func (w *WinWatcher) Watch(sdManager *shutdown.Manager) (<-chan core.WindowEvent
 
 func (w *WinWatcher) Close(sdManager *shutdown.Manager) {
 	sdManager.Shutdown()
+
+	if w.hwnd != 0 {
+		_, _, _ = postMessageW.Call(w.hwnd, uintptr(WmClose), 0, 0)
+	}
+
 	w.WG.Wait()
 }
 

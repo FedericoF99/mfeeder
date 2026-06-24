@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 const schema = `
@@ -48,7 +48,7 @@ const schema = `
 `
 
 func Init(ctx context.Context) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", "mfeeder.db")
+	db, err := sql.Open("sqlite", "mfeeder.db")
 	if err != nil {
 		return nil, fmt.Errorf("database init failed: %v", err)
 	}
@@ -62,26 +62,35 @@ func Init(ctx context.Context) (*sql.DB, error) {
 		return nil, err
 	}
 
+	return db, nil
+}
+
+func StartupClean(ctx context.Context, db *sql.DB) error {
+	err := CloseAll(ctx, db)
+	if err != nil {
+		return err
+	}
+
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	err = moveToHistory(ctx, tx)
 	if err != nil {
 		e := tx.Rollback()
 		if e != nil {
-			return nil, e
+			return e
 		}
-		return nil, err
+		return err
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return db, nil
+	return nil
 }
 
 func moveToHistory(ctx context.Context, tx *sql.Tx) error {

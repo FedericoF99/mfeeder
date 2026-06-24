@@ -25,7 +25,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = sqlite.CloseAll(ctx, db)
+	err = sqlite.StartupClean(ctx, db)
 	if err != nil {
 		log.Fatal(err)
 	}

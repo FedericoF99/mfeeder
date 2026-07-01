@@ -21,7 +21,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	sdManager := shutdown.Manager{Cancel: cancel}
 
-	db, err := sqlite.Init(ctx)
+	db, err := sqlite.Init()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -40,6 +40,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// todo: dichiarare a priori le finestre aperte potrebbe non essere una buona idea
+	// potenzialmente una finestra minimizzata per molte ore risulterebbe aperta se non arrivano eventi che la riguardano
 	for _, w := range wArr {
 		if w.Focused {
 			_ = sqlite.WindowFocused(ctx, w, db)

@@ -23,7 +23,10 @@ const createQuery = `
 func WindowOpened(ctx context.Context, window core.Window, db *sql.DB) error {
 	now := time.Now()
 
-	row := db.QueryRowContext(ctx, "select id, title, opened from sessions where pid = ? and exe = ?", window.Pid, window.Exe)
+	row := db.QueryRowContext(ctx,
+		`select id, title, opened from sessions 
+            	where pid = ? and exe = ? and title = ?`,
+		window.Pid, window.Exe, window.Title)
 
 	var id int
 	var title string
@@ -45,7 +48,10 @@ func WindowOpened(ctx context.Context, window core.Window, db *sql.DB) error {
 		return nil
 	}
 
-	_, err = db.ExecContext(ctx, "update sessions set opened = 1, opened_started_at_ms = ? where id = ?", now.UnixMilli(), id)
+	_, err = db.ExecContext(ctx,
+		`update sessions set opened = 1, opened_started_at_ms = ? where id = ?`,
+		now.UnixMilli(), id)
+
 	if err != nil {
 		return err
 	}
@@ -78,7 +84,10 @@ func createWindow(focused bool, ctx context.Context, window core.Window, db *sql
 func WindowClosed(ctx context.Context, window core.Window, db *sql.DB) error {
 	now := time.Now()
 
-	row := db.QueryRowContext(ctx, "select id, title, time_opened_ms, opened_started_at_ms, time_focused_ms, focused_started_at_ms, opened from sessions where pid = ? and exe = ?", window.Pid, window.Exe)
+	row := db.QueryRowContext(ctx,
+		`select id, title, time_opened_ms, opened_started_at_ms, time_focused_ms, focused_started_at_ms, opened 
+				from sessions where pid = ? and exe = ? and title = ?`,
+		window.Pid, window.Exe, window.Title)
 
 	var id int
 	var title string
@@ -99,7 +108,10 @@ func WindowClosed(ctx context.Context, window core.Window, db *sql.DB) error {
 
 	msOpened := (now.UnixMilli() - openedStartedAtMs) + timeOpenedMs
 	msFocused := (now.UnixMilli() - focusedStartedAtMs) + timeFocusedMs
-	_, err = db.ExecContext(ctx, "update sessions set opened = 0, focused = 0, time_opened_ms = ?, time_focused_ms = case when focused = 1 then ? else time_focused_ms end where id = ?", msOpened, msFocused, id)
+	_, err = db.ExecContext(ctx,
+		`update sessions set opened = 0, focused = 0, time_opened_ms = ?, 
+                time_focused_ms = case when focused = 1 then ? else time_focused_ms end 
+                where id = ?`, msOpened, msFocused, id)
 	if err != nil {
 		return err
 	}
@@ -110,7 +122,10 @@ func WindowClosed(ctx context.Context, window core.Window, db *sql.DB) error {
 func WindowFocused(ctx context.Context, window core.Window, db *sql.DB) error {
 	now := time.Now()
 
-	row := db.QueryRowContext(ctx, "select id, title, time_focused_ms, focused_started_at_ms, focused from sessions where pid = ? and exe = ?", window.Pid, window.Exe)
+	row := db.QueryRowContext(ctx,
+		`select id, title, time_focused_ms, focused_started_at_ms, focused 
+				from sessions where pid = ? and exe = ? and title = ?`,
+		window.Pid, window.Exe, window.Title)
 
 	var id int
 	var title string
@@ -143,7 +158,10 @@ func WindowFocused(ctx context.Context, window core.Window, db *sql.DB) error {
 		return err
 	}
 
-	_, err = db.ExecContext(ctx, "update sessions set opened = 1, focused = 1, focused_started_at_ms = ? where id = ?", now.UnixMilli(), id)
+	_, err = db.ExecContext(ctx,
+		`update sessions set opened = 1, focused = 1, focused_started_at_ms = ? 
+                where id = ?`, now.UnixMilli(), id)
+
 	if err != nil {
 		return err
 	}
@@ -152,7 +170,10 @@ func WindowFocused(ctx context.Context, window core.Window, db *sql.DB) error {
 }
 
 func resetAllFocused(now time.Time, ctx context.Context, db *sql.DB) error {
-	_, err := db.ExecContext(ctx, "update sessions set focused = 0, time_focused_ms = (? - focused_started_at_ms) + time_focused_ms where focused = 1", now.UnixMilli())
+	_, err := db.ExecContext(ctx,
+		`update sessions set focused = 0, time_focused_ms = (? - focused_started_at_ms) + time_focused_ms 
+                where focused = 1`, now.UnixMilli())
+
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}

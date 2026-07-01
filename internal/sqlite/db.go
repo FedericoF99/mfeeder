@@ -29,7 +29,7 @@ const schema = `
 	
 		session_date text not null
 	);
-	create unique index if not exists pid_index on sessions(pid, exe);
+	create unique index if not exists pid_index on sessions(pid, exe, title);
 	create index if not exists pid_date_index on sessions(pid, session_date);
 	
 	CREATE TABLE IF NOT EXISTS sessions_history
@@ -47,7 +47,7 @@ const schema = `
 	create index if not exists date_index on sessions_history(session_date);
 `
 
-func Init(ctx context.Context) (*sql.DB, error) {
+func Init() (*sql.DB, error) {
 	db, err := sql.Open("sqlite", "mfeeder.db")
 	if err != nil {
 		return nil, fmt.Errorf("database init failed: %v", err)

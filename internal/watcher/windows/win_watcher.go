@@ -172,6 +172,9 @@ func (w *WinWatcher) eventLoop(ch chan<- core.WindowEvent, chRaw <-chan RawWindo
 			if err != nil {
 				continue
 			}
+			if slices.Contains(w.Cfg.Exclusions(), window.Title) {
+				continue
+			}
 
 			if slices.Contains(w.Cfg.Exclusions(), window.Exe) {
 				continue

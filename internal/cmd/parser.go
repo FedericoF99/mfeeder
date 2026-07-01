@@ -46,16 +46,23 @@ func parseCmd(args []string) (*cmd, error) {
 func validateDay(args []string, c *cmd) error {
 	aLen := len(args)
 
-	if aLen > 3 {
+	if aLen > 4 {
 		return fmt.Errorf("unexpected arguments for day command, try: mfeeder --help")
 	}
 
-	if aLen == 3 {
+	if aLen > 2 {
 		if _, err := time.Parse("01-02", args[2]); err != nil {
 			return fmt.Errorf("invalid date format, should be MM-DD")
 		}
 
 		c.args = append(c.args, args[2])
+	}
+	if aLen > 3 {
+		if args[3] == "-e" || args[3] == "-p" {
+			c.args = append(c.args, args[3][1:])
+		} else {
+			return fmt.Errorf("invalid argument %s for day command, try: mfeeder --help", args[3])
+		}
 	}
 
 	c.cmd = "day"

@@ -3,8 +3,10 @@ package cmd
 import (
 	"fmt"
 	"mfeeder/internal/config"
+	"mfeeder/internal/sqlite"
 	"os"
 	"strings"
+	"time"
 )
 
 func Run() error {
@@ -30,14 +32,68 @@ func run(c *cmd) error {
 	case "get":
 		return runGet(c)
 	case "help":
-		help()
+		Help()
 		return nil
 	}
 	return fmt.Errorf("unknown command: %v", c.cmd)
 }
 
 func runDay(c *cmd) error {
-	// todo: implement day
+	db, err := sqlite.Init()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	var sa []sqlite.Session
+	now := time.Now()
+
+	var day time.Time
+
+	if len(c.args) == 0 {
+		day = now
+		sa, err = sqlite.GetDay(day.Format("2006-01-02"), db)
+		if err != nil {
+			return err
+		}
+	} else {
+		rawDay, err := time.Parse("01-02", c.args[0])
+		if err != nil {
+			return err
+		}
+
+		if rawDay.Month() > now.Month() {
+			day = time.Date(now.AddDate(-1, 0, 0).Year(),
+				rawDay.Month(), rawDay.Day(), 0, 0, 0, 0, time.Local)
+		} else {
+			day = time.Date(now.Year(), rawDay.Month(), rawDay.Day(), 0, 0, 0, 0, time.Local)
+		}
+
+		sa, err = sqlite.GetDay(day.Format("2006-01-02"), db)
+		if err != nil {
+			return err
+		}
+	}
+
+	if len(c.args) == 1 {
+		err = PrintSessions(sa)
+		if err != nil {
+			return err
+		}
+	} else if c.args[1] == "p" {
+		err = PrintGroupedByProject(sa)
+		if err != nil {
+			return err
+		}
+	} else if c.args[1] == "e" {
+		err = PrintGroupedByExe(sa)
+		if err != nil {
+			return err
+		}
+	} else {
+		fmt.Println("unknown format")
+	}
+
 	return nil
 }
 

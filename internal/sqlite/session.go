@@ -12,7 +12,7 @@ type Session struct {
 func GetDay(t string, db *sql.DB) ([]Session, error) {
 	rows, err := db.Query(`
 		select exe, pid, title, sum(time_opened_ms), sum(time_focused_ms)
-		from sessions where date(session_date) = date('2026-06-24') 
+		from sessions where date(session_date) = date(?) 
 		group by exe, pid, title order by sum(time_focused_ms) desc, sum(time_opened_ms) desc;`,
 		t)
 
@@ -34,6 +34,11 @@ func GetDay(t string, db *sql.DB) ([]Session, error) {
 			return nil, err
 		}
 		sessions = append(sessions, Session{exe, timeOpened, timeFocused, titles})
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
 	}
 
 	return sessions, nil

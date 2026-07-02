@@ -50,18 +50,13 @@ func validateDay(args []string, c *cmd) error {
 		return fmt.Errorf("unexpected arguments for day command, try: mfeeder --help")
 	}
 
-	if aLen > 2 {
-		if _, err := time.Parse("01-02", args[2]); err != nil {
-			return fmt.Errorf("invalid date format, should be MM-DD")
-		}
-
-		c.args = append(c.args, args[2])
-	}
-	if aLen > 3 {
-		if args[3] == "-e" || args[3] == "-p" {
-			c.args = append(c.args, args[3][1:])
+	for i := 2; i < aLen; i++ {
+		if _, err := time.Parse("01-02", args[i]); err == nil {
+			c.args = append(c.args, args[i])
+		} else if args[i] == "-e" || args[i] == "-p" {
+			c.opt[args[i][1:]] = ""
 		} else {
-			return fmt.Errorf("invalid argument %s for day command, try: mfeeder --help", args[3])
+			return fmt.Errorf("invalid argument %s for day command, try: mfeeder --help", args[i])
 		}
 	}
 

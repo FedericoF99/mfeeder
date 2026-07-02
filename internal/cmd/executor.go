@@ -75,17 +75,17 @@ func runDay(c *cmd) error {
 		}
 	}
 
-	if len(c.args) == 1 {
+	if len(c.opt) == 0 {
 		err = PrintSessions(sa)
 		if err != nil {
 			return err
 		}
-	} else if c.args[1] == "p" {
+	} else if _, ok := c.opt["p"]; ok {
 		err = PrintGroupedByProject(sa)
 		if err != nil {
 			return err
 		}
-	} else if c.args[1] == "e" {
+	} else if _, ok = c.opt["e"]; ok {
 		err = PrintGroupedByExe(sa)
 		if err != nil {
 			return err
@@ -100,9 +100,9 @@ func runDay(c *cmd) error {
 func runEx(c *cmd) error {
 	var err error
 
-	if c.args[0] == "add" {
+	if _, ok := c.opt["add"]; ok {
 		err = config.AddExclusion(c.opt["add"])
-	} else if c.args[0] == "rm" {
+	} else if _, ok = c.opt["rm"]; ok {
 		err = config.RmExclusion(c.opt["rm"])
 	}
 

@@ -95,7 +95,7 @@ func RmExclusion(exc string) error {
 	}
 
 	excI := slices.Index(cfg.exclusions, exc)
-	slices.Delete(cfg.exclusions, excI, excI+1)
+	cfg.exclusions = slices.Delete(cfg.exclusions, excI, excI+1)
 
 	err = overwriteConf(cfg)
 	if err != nil {

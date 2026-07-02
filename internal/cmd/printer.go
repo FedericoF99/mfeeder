@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"mfeeder/internal/sqlite"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -18,11 +19,21 @@ var exeGroups = map[string]struct{}{
 	"nvim": {}, "vim": {}, "sublime_text": {}, "zed": {},
 }
 
+type group struct {
+	key         string
+	sessions    []sqlite.Session
+	timeFocused int64
+	timeOpened  int64
+}
+
 func Help() {
 	fmt.Println("Metric Feeder help")
 	fmt.Println("available commands:")
-	fmt.Println("	mfeeder day <date>")
+	fmt.Println("	mfeeder day <date> <optional flags>")
 	fmt.Println("		prints the feed for the given date, if no date is given, prints the feed for today")
+	fmt.Println("		available flags:")
+	fmt.Println("			-e: groups the feed by the exe name")
+	fmt.Println("			-p: groups the feed by the project name (only for ides)")
 	fmt.Println("")
 	fmt.Println("	mfeeder ex <option> <value>")
 	fmt.Println("		options available:")
@@ -47,8 +58,12 @@ func PrintSessions(sessions []sqlite.Session) error {
 		return err
 	}
 
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].TimeFocused > sessions[j].TimeFocused
+	})
+
 	for _, s := range sessions {
-		_, err = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", s.Exe, s.Titles, formatMs(s.TimeOpened), formatMs(s.TimeFocused))
+		_, err = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", s.Exe, s.Title, formatMs(s.TimeOpened), formatMs(s.TimeFocused))
 		if err != nil {
 			return err
 		}
@@ -63,18 +78,14 @@ func PrintSessions(sessions []sqlite.Session) error {
 }
 
 func PrintGroupedByExe(sessions []sqlite.Session) error {
-	var exeMap = make(map[string][]sqlite.Session)
+	var groups = make([]group, 0)
 
 	for _, s := range sessions {
 		exe := s.Exe
-		if _, ok := exeMap[exe]; ok {
-			exeMap[exe] = append(exeMap[exe], s)
-		} else {
-			exeMap[exe] = []sqlite.Session{s}
-		}
+		groups = insert(exe, s, groups)
 	}
 
-	err := printMap(exeMap, "EXE\tTIME OPENED\tTIME FOCUSED")
+	err := printGroups(groups, "EXE\tTIME OPENED\tTIME FOCUSED")
 	if err != nil {
 		return err
 	}
@@ -83,7 +94,7 @@ func PrintGroupedByExe(sessions []sqlite.Session) error {
 }
 
 func PrintGroupedByProject(sessions []sqlite.Session) error {
-	var projectMap = make(map[string][]sqlite.Session)
+	var groups = make([]group, 0)
 
 	for _, s := range sessions {
 		ide := isIde(s.Exe)
@@ -91,15 +102,15 @@ func PrintGroupedByProject(sessions []sqlite.Session) error {
 			continue
 		}
 
-		project := projectFromTitle(s.Titles)
-		if _, ok := projectMap[project]; ok {
-			projectMap[project] = append(projectMap[project], s)
-		} else {
-			projectMap[project] = []sqlite.Session{s}
+		project, cleanTitle := projectFromTitle(s.Title)
+		if cleanTitle != "" {
+			s.Title = cleanTitle
 		}
+
+		groups = insert(project, s, groups)
 	}
 
-	err := printMap(projectMap, "PROJECT\tTIME OPENED\tTIME FOCUSED")
+	err := printGroups(groups, "PROJECT\tTIME OPENED\tTIME FOCUSED")
 	if err != nil {
 		return err
 	}
@@ -107,7 +118,27 @@ func PrintGroupedByProject(sessions []sqlite.Session) error {
 	return nil
 }
 
-func printMap(m map[string][]sqlite.Session, title string) error {
+func printGroups(gs []group, title string) error {
+	for i := range gs {
+		var tf int64 = 0
+		var to int64 = 0
+		for _, s := range gs[i].sessions {
+			tf += s.TimeFocused
+			to += s.TimeOpened
+		}
+
+		gs[i].timeFocused = tf
+		gs[i].timeOpened = to
+	}
+
+	sort.Slice(gs, func(i, j int) bool {
+		if gs[i].timeFocused == gs[j].timeFocused {
+			return gs[i].timeOpened > gs[j].timeOpened
+		}
+
+		return gs[i].timeFocused > gs[j].timeFocused
+	})
+
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	_, err := fmt.Fprintln(w, title)
 	if err != nil {
@@ -118,29 +149,19 @@ func printMap(m map[string][]sqlite.Session, title string) error {
 		return err
 	}
 
-	for k, v := range m {
-		var open int64 = 0
-		var focus int64 = 0
-		buffer := make([]string, 0, len(v))
-
-		for i, s := range v {
-			prefix := "  ├─ "
-			if i == len(v)-1 {
-				prefix = "  └─ "
-			}
-
-			buffer = append(buffer, fmt.Sprintf("%s\t%s\t%s\n", prefix+" "+s.Titles, formatMs(s.TimeOpened), formatMs(s.TimeFocused)))
-			open += s.TimeOpened
-			focus += s.TimeFocused
-		}
-
-		_, err = fmt.Fprintf(w, "%s\t%s\t%s\n", k, formatMs(open), formatMs(focus))
+	for _, v := range gs {
+		_, err = fmt.Fprintf(w, "%s\t%s\t%s\n", v.key, formatMs(v.timeOpened), formatMs(v.timeFocused))
 		if err != nil {
 			return err
 		}
 
-		for _, s := range buffer {
-			_, err = fmt.Fprint(w, s)
+		for i, s := range v.sessions {
+			prefix := "  ├─ "
+			if i == len(v.sessions)-1 {
+				prefix = "  └─ "
+			}
+
+			_, err = fmt.Fprintf(w, "%s\t%s\t%s\n", prefix+" "+s.Title, formatMs(s.TimeOpened), formatMs(s.TimeFocused))
 			if err != nil {
 				return err
 			}
@@ -160,6 +181,18 @@ func printMap(m map[string][]sqlite.Session, title string) error {
 	return nil
 }
 
+func insert(key string, s sqlite.Session, gs []group) []group {
+	for i := range gs {
+		if gs[i].key == key {
+			gs[i].sessions = append(gs[i].sessions, s)
+			return gs
+		}
+	}
+
+	gs = append(gs, group{key: key, sessions: []sqlite.Session{s}})
+	return gs
+}
+
 func isIde(exe string) bool {
 	key := strings.ToLower(exe)
 	if _, ok := exeGroups[key]; ok {
@@ -168,13 +201,13 @@ func isIde(exe string) bool {
 	return false
 }
 
-func projectFromTitle(title string) string {
+func projectFromTitle(title string) (string, string) {
 	for _, sep := range []rune{'–', '—', '-'} {
 		if i := strings.Index(title, string(sep)); i > 0 {
-			return strings.TrimSpace(title[:i])
+			return strings.TrimSpace(title[:i]), strings.TrimSpace(title[i+len(string(sep)):])
 		}
 	}
-	return "undefined"
+	return "undefined", ""
 }
 
 func formatMs(ms int64) string {

@@ -94,6 +94,9 @@ func enumWindowsCallback(ctx context.Context, c *config.Conf) uintptr {
 		if err != nil {
 			return 1
 		}
+		if isExcluded(hwnd, window, c) {
+			return 1
+		}
 
 		info := (*[]core.Window)(unsafe.Pointer(lParam))
 		*info = append(*info, window)
@@ -166,34 +169,16 @@ func (w *WinWatcher) eventLoop(ch chan<- core.WindowEvent, chRaw <-chan RawWindo
 
 			fHwnd := getForegroundHandle()
 			window, err := getWindowInfo(raw.hwnd, fHwnd)
-			if window.Title == "" {
-				continue
-			}
 			if err != nil {
 				continue
 			}
-			if slices.Contains(w.Cfg.Exclusions(), window.Title) {
+			if isExcluded(raw.hwnd, window, w.Cfg) {
 				continue
 			}
 
-			if slices.Contains(w.Cfg.Exclusions(), window.Exe) {
-				continue
-			}
-
-			class, err := getClassName(raw.hwnd)
-			if err != nil {
-				continue
-			}
-
-			if slices.Contains(w.Cfg.Exclusions(), class) {
-				continue
-			}
-
-			if err == nil {
-				ch <- core.WindowEvent{
-					Window:      window,
-					WindowEvent: raw.event,
-				}
+			ch <- core.WindowEvent{
+				Window:      window,
+				WindowEvent: raw.event,
 			}
 		}
 	}
@@ -319,4 +304,28 @@ func windowProcCallback(sdManager *shutdown.Manager) uintptr {
 		ret, _, _ := defWindowProcW.Call(hwnd, uintptr(msg), wParam, lParam)
 		return ret
 	})
+}
+
+func isExcluded(hwnd uintptr, window core.Window, cfg *config.Conf) bool {
+	if window.Title == "" {
+		return true
+	}
+
+	exclusions := cfg.Exclusions()
+	if slices.Contains(exclusions, window.Title) {
+		return true
+	}
+	if slices.Contains(exclusions, window.Exe) {
+		return true
+	}
+
+	class, err := getClassName(hwnd)
+	if err != nil {
+		return true
+	}
+	if slices.Contains(exclusions, class) {
+		return true
+	}
+
+	return false
 }

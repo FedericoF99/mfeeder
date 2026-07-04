@@ -2,15 +2,15 @@ package config
 
 import (
 	"os"
+	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 )
 
 func TestDefaultConf(t *testing.T) {
-	t.Cleanup(func() {
-		os.Remove(filePath)
-	})
+	withConfigPath(t, filepath.Join(t.TempDir(), "mfeederd.conf"))
 
 	cfg, err := LoadConfig(true)
 	if err != nil {
@@ -79,14 +79,153 @@ func TestAddExclusion(t *testing.T) {
 }
 
 func createTempConf(t *testing.T, exclusions string) {
-	dir := os.TempDir()
-	path := dir + "/" + filePath
-	err := os.WriteFile(path, []byte("EXCLUSIONS="+exclusions+"\n"), 0644)
-	if err != nil {
-		t.Errorf("error creating test file: %v", err)
+	withConfigContent(t, "EXCLUSIONS="+exclusions+"\n")
+}
+
+func TestLoadConfigWithoutOverwriteReturnsMissingFileError(t *testing.T) {
+	withConfigPath(t, filepath.Join(t.TempDir(), "missing.conf"))
+
+	if _, err := LoadConfig(false); err == nil {
+		t.Fatal("expected missing config error")
 	}
-	filePath = "/tmp/" + filePath
+}
+
+func TestAddExclusionDuplicateFails(t *testing.T) {
+	withConfigContent(t, "EXCLUSIONS=foo,bar\n")
+
+	if err := AddExclusion("foo"); err == nil {
+		t.Fatal("expected duplicate exclusion error")
+	}
+}
+
+func TestAddExclusionRejectsEmptyValue(t *testing.T) {
+	withConfigContent(t, "EXCLUSIONS=foo,bar\n")
+
+	if err := AddExclusion(""); err == nil {
+		t.Fatal("expected empty exclusion error")
+	}
+}
+
+func TestAddExclusionTrimsAndDetectsDuplicate(t *testing.T) {
+	withConfigContent(t, "EXCLUSIONS=foo,bar\n")
+
+	if err := AddExclusion(" foo "); err == nil {
+		t.Fatal("expected spaced duplicate exclusion error")
+	}
+}
+
+func TestRemoveMissingExclusionFails(t *testing.T) {
+	withConfigContent(t, "EXCLUSIONS=foo,bar\n")
+
+	if err := RmExclusion("missing"); err == nil {
+		t.Fatal("expected missing exclusion error")
+	}
+}
+
+func TestRemoveExclusionTrimsInput(t *testing.T) {
+	withConfigContent(t, "EXCLUSIONS=foo,bar\n")
+
+	if err := RmExclusion(" foo "); err != nil {
+		t.Fatalf("remove exclusion should trim input: %v", err)
+	}
+	cfg, err := LoadConfig(false)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if slices.Contains(cfg.Exclusions(), "foo") {
+		t.Fatalf("trimmed exclusion was not removed: %#v", cfg.Exclusions())
+	}
+}
+
+func TestAddAndRemoveExclusionFailWhenConfigHasNoExclusions(t *testing.T) {
+	withConfigContent(t, "OTHER=value\n")
+
+	if err := AddExclusion("foo"); err == nil {
+		t.Fatal("expected add exclusion to fail without EXCLUSIONS entry")
+	}
+	if err := RmExclusion("foo"); err == nil {
+		t.Fatal("expected remove exclusion to fail without EXCLUSIONS entry")
+	}
+}
+
+func TestGetExclusions(t *testing.T) {
+	withConfigContent(t, "EXCLUSIONS=foo,bar\n")
+
+	exclusions, err := GetExclusions()
+	if err != nil {
+		t.Fatalf("get exclusions: %v", err)
+	}
+	if !reflect.DeepEqual(exclusions, []string{"foo", "bar"}) {
+		t.Fatalf("unexpected exclusions: %#v", exclusions)
+	}
+}
+
+func TestLoadConfigIgnoresEmptyAndUnknownLines(t *testing.T) {
+	withConfigContent(t, "\nUNKNOWN=value\n  EXCLUSIONS=foo,bar  \n")
+
+	cfg, err := LoadConfig(false)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if !reflect.DeepEqual(cfg.Exclusions(), []string{"foo", "bar"}) {
+		t.Fatalf("unexpected exclusions: %#v", cfg.Exclusions())
+	}
+}
+
+func TestLoadConfigTrimsExclusionValues(t *testing.T) {
+	withConfigContent(t, "EXCLUSIONS=foo, bar, baz\n")
+
+	cfg, err := LoadConfig(false)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if !reflect.DeepEqual(cfg.Exclusions(), []string{"foo", "bar", "baz"}) {
+		t.Fatalf("unexpected exclusions: %#v", cfg.Exclusions())
+	}
+}
+
+func TestLoadConfigRejectsEmptyExclusionTokens(t *testing.T) {
+	withConfigContent(t, "EXCLUSIONS=foo,,bar\n")
+
+	if cfg, err := LoadConfig(false); err != nil {
+		t.Fatal("expected error on empty exclusion token")
+	} else {
+		if len(cfg.Exclusions()) != 2 {
+			t.Fatalf("expected 2 exclusions, got %d", len(cfg.Exclusions()))
+		}
+	}
+}
+
+func TestLoadConfigRejectsDuplicateExclusionTokens(t *testing.T) {
+	withConfigContent(t, "EXCLUSIONS=foo,bar,foo\n")
+
+	if cfg, err := LoadConfig(false); err != nil {
+		t.Fatal("unexpected error on duplicate exclusion token")
+	} else if cfg == nil {
+		t.Fatalf("expected config to be non-nil")
+	} else {
+		if len(cfg.Exclusions()) != 2 {
+			t.Fatalf("expected 2 exclusions, got %d", len(cfg.Exclusions()))
+		}
+	}
+}
+
+func withConfigContent(t *testing.T, content string) {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "mfeederd.conf")
+	withConfigPath(t, path)
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+}
+
+func withConfigPath(t *testing.T, path string) {
+	t.Helper()
+
+	previous := filePath
+	filePath = path
 	t.Cleanup(func() {
-		filePath = strings.TrimPrefix(filePath, "/tmp/")
+		filePath = previous
 	})
 }

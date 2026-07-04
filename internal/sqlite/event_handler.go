@@ -85,7 +85,7 @@ func WindowClosed(ctx context.Context, window core.Window, db *sql.DB) error {
 	now := time.Now()
 
 	row := db.QueryRowContext(ctx,
-		`select id, title, time_opened_ms, opened_started_at_ms, time_focused_ms, focused_started_at_ms, opened 
+		`select id, title, time_opened_ms, opened_started_at_ms, time_focused_ms, focused_started_at_ms, opened, focused 
 				from sessions where pid = ? and exe = ? and title = ?`,
 		window.Pid, window.Exe, window.Title)
 
@@ -96,18 +96,27 @@ func WindowClosed(ctx context.Context, window core.Window, db *sql.DB) error {
 	var timeFocusedMs int64
 	var focusedStartedAtMs int64
 	var opened bool
+	var focused bool
 
-	err := row.Scan(&id, &title, &timeOpenedMs, &openedStartedAtMs, &timeFocusedMs, &focusedStartedAtMs, &opened)
+	err := row.Scan(&id, &title, &timeOpenedMs, &openedStartedAtMs, &timeFocusedMs, &focusedStartedAtMs, &opened, &focused)
 	if err != nil {
 		return err
 	}
 
-	if !opened {
+	if !opened && !focused {
 		return nil
 	}
 
 	msOpened := (now.UnixMilli() - openedStartedAtMs) + timeOpenedMs
 	msFocused := (now.UnixMilli() - focusedStartedAtMs) + timeFocusedMs
+
+	if msFocused < 0 {
+		msFocused = 0
+	}
+	if msOpened < 0 {
+		msOpened = 0
+	}
+
 	_, err = db.ExecContext(ctx,
 		`update sessions set opened = 0, focused = 0, time_opened_ms = ?, 
                 time_focused_ms = case when focused = 1 then ? else time_focused_ms end 

@@ -202,9 +202,9 @@ func isIde(exe string) bool {
 }
 
 func projectFromTitle(title string) (string, string) {
-	for _, sep := range []rune{'–', '—', '-'} {
-		if i := strings.Index(title, string(sep)); i > 0 {
-			return strings.TrimSpace(title[:i]), strings.TrimSpace(title[i+len(string(sep)):])
+	for _, sep := range []string{" – ", " — ", " - "} {
+		if i := strings.Index(title, sep); i > 0 {
+			return strings.TrimSpace(title[:i]), strings.TrimSpace(title[i+len(sep):])
 		}
 	}
 	return "undefined", ""

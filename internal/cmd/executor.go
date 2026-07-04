@@ -52,7 +52,7 @@ func runDay(c *cmd) error {
 
 	if len(c.args) == 0 {
 		day = now
-		sa, err = sqlite.GetDay(day.Format("2006-01-02"), db)
+		sa, err = sqlite.GetDay(day, db)
 		if err != nil {
 			return err
 		}
@@ -69,7 +69,7 @@ func runDay(c *cmd) error {
 			day = time.Date(now.Year(), rawDay.Month(), rawDay.Day(), 0, 0, 0, 0, time.Local)
 		}
 
-		sa, err = sqlite.GetDay(day.Format("2006-01-02"), db)
+		sa, err = sqlite.GetDay(day, db)
 		if err != nil {
 			return err
 		}

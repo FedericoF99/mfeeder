@@ -126,12 +126,12 @@ func moveToHistory(ctx context.Context, tx *sql.Tx) error {
 func CloseAll(ctx context.Context, db *sql.DB) error {
 	now := time.Now()
 
-	_, err := db.ExecContext(ctx, "update sessions set opened = 0, time_opened_ms = (? - opened_started_at_ms) + time_opened_ms where opened = 1", now.UnixMilli())
+	_, err := db.ExecContext(ctx, "update sessions set opened = 0, time_opened_ms = max(0, (? - opened_started_at_ms) + time_opened_ms) where opened = 1", now.UnixMilli())
 	if err != nil {
 		return err
 	}
 
-	_, err = db.ExecContext(ctx, "update sessions set focused = 0, time_focused_ms = (? - focused_started_at_ms) + time_focused_ms where focused = 1", now.UnixMilli())
+	_, err = db.ExecContext(ctx, "update sessions set focused = 0, time_focused_ms = max(0, (? - focused_started_at_ms) + time_focused_ms) where focused = 1", now.UnixMilli())
 	if err != nil {
 		return err
 	}

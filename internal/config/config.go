@@ -54,7 +54,16 @@ func LoadConfig(ow bool) (*Conf, error) {
 		if strings.HasPrefix(line, "EXCLUSIONS=") {
 			trimmed := strings.TrimPrefix(line, "EXCLUSIONS=")
 			if trimmed != "" {
-				cfg.exclusions = strings.Split(trimmed, ",")
+				trimmed = strings.Replace(trimmed, " ", "", -1)
+				e := strings.Split(trimmed, ",")
+
+				for i := range len(e) {
+					if e[i] == "" || slices.Contains(cfg.exclusions, e[i]) {
+						continue
+					}
+
+					cfg.exclusions = append(cfg.exclusions, e[i])
+				}
 			}
 		}
 	}
@@ -82,6 +91,12 @@ func createDefault() (*Conf, error) {
 // RmExclusion removes an exclusion from the config file if it exists
 // and overwrites the file with the new exclusions
 func RmExclusion(exc string) error {
+	exc = strings.TrimSpace(exc)
+
+	if exc == "" {
+		return errors.New("empty exclusion not allowed")
+	}
+
 	cfg, err := LoadConfig(false)
 	if err != nil {
 		return fmt.Errorf("error loading config: %v", err)
@@ -108,6 +123,12 @@ func RmExclusion(exc string) error {
 // AddExclusion adds an exclusion from the config file if it doesn't exist
 // and overwrites the file with the new exclusions
 func AddExclusion(exc string) error {
+	exc = strings.TrimSpace(exc)
+
+	if exc == "" {
+		return errors.New("empty exclusion not allowed")
+	}
+
 	cfg, err := LoadConfig(false)
 	if err != nil {
 		return fmt.Errorf("error loading config: %v", err)

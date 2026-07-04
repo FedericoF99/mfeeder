@@ -32,8 +32,8 @@ jobs:
       - name: Build Windows binaries
         run: |
           mkdir dist
-          go build -ldflags="-H=windowsgui" -o ./dist/mfeederd.exe ./cmd/mfeederd/
-          go build -o ./dist/mfeeder.exe ./cmd/mfeeder/
+          go build -ldflags="-H=windowsgui" -o ./dist/mfeederd.exe ./daemon/
+          go build -o ./dist/mfeeder.exe ./cli/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

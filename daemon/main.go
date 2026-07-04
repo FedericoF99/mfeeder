@@ -64,11 +64,14 @@ func main() {
 			println(event.WindowEvent, event.Window.Title)
 			switch event.WindowEvent {
 			case core.WindowOpened:
-				_ = sqlite.WindowOpened(ctx, event.Window, db)
+				err = sqlite.WindowOpened(ctx, event.Window, db)
 			case core.WindowClosed:
-				_ = sqlite.WindowClosed(ctx, event.Window, db)
+				err = sqlite.WindowClosed(ctx, event.Window, db)
 			case core.WindowFocused:
-				_ = sqlite.WindowFocused(ctx, event.Window, db)
+				err = sqlite.WindowFocused(ctx, event.Window, db)
+			}
+			if err != nil {
+				log.Println(err)
 			}
 		}
 	}

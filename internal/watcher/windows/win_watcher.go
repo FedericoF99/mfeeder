@@ -176,9 +176,10 @@ func (w *WinWatcher) eventLoop(ch chan<- core.WindowEvent, chRaw <-chan RawWindo
 				continue
 			}
 
-			ch <- core.WindowEvent{
-				Window:      window,
-				WindowEvent: raw.event,
+			select {
+			case ch <- core.WindowEvent{Window: window, WindowEvent: raw.event}:
+			default:
+				// drop event
 			}
 		}
 	}

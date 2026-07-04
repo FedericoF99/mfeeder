@@ -180,7 +180,7 @@ func WindowFocused(ctx context.Context, window core.Window, db *sql.DB) error {
 
 func resetAllFocused(now time.Time, ctx context.Context, db *sql.DB) error {
 	_, err := db.ExecContext(ctx,
-		`update sessions set focused = 0, time_focused_ms = (? - focused_started_at_ms) + time_focused_ms 
+		`update sessions set focused = 0, time_focused_ms = max(0, (? - focused_started_at_ms) + time_focused_ms)
                 where focused = 1`, now.UnixMilli())
 
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {

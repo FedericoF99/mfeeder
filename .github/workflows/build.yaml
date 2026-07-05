@@ -1,15 +1,15 @@
-name: Go
+name: Build
 
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-  workflow_dispatch:
 
 jobs:
+  checks:
+    uses: ./.github/workflows/checks.yaml
 
   build:
+    needs: checks
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -20,16 +20,7 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Show Go version
-        run: go version
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Test
-        run: go test -v ./...
-
-      - name: Build Windows binaries
+      - name: Build
         run: |
           mkdir dist
           go build -ldflags="-H=windowsgui" -o ./dist/mfeederd.exe ./daemon/

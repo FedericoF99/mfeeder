@@ -1,0 +1,9 @@
+name: Test
+
+on:
+  push:
+    branches: [ "test" ]
+
+jobs:
+  checks:
+    uses: ./.github/workflows/checks.yaml

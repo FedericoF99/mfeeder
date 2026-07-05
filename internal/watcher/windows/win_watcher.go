@@ -29,11 +29,9 @@ type WinWatcher struct {
 func (w *WinWatcher) Snapshot(ctx context.Context) ([]core.Window, error) {
 
 	info := make([]core.Window, 0)
-	infoPtr := unsafe.Pointer(&info)
-	lParam := uintptr(infoPtr)
 
-	cb := enumWindowsCallback(ctx, w.Cfg)
-	res, _, err := enumWindows.Call(cb, lParam)
+	cb := enumWindowsCallback(ctx, w.Cfg, &info)
+	res, _, err := enumWindows.Call(cb, 0)
 
 	if res != 0 {
 		err = nil
@@ -78,7 +76,7 @@ func (w *WinWatcher) Close(sdManager *shutdown.Manager) {
 
 // hwnd is a window handle (basically a pointer to the window)
 // lParam is a pointer to an application-defined value passed to the callback from EnumWindows
-func enumWindowsCallback(ctx context.Context, c *config.Conf) uintptr {
+func enumWindowsCallback(ctx context.Context, c *config.Conf, info *[]core.Window) uintptr {
 	fHwnd := getForegroundHandle()
 
 	return syscall.NewCallback(func(hwnd uintptr, lParam uintptr) uintptr {
@@ -98,7 +96,6 @@ func enumWindowsCallback(ctx context.Context, c *config.Conf) uintptr {
 			return 1
 		}
 
-		info := (*[]core.Window)(unsafe.Pointer(lParam))
 		*info = append(*info, window)
 
 		return 1

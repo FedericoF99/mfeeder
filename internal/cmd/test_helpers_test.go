@@ -53,7 +53,9 @@ func withConfigFile(t *testing.T, content string) {
 
 	dir := t.TempDir()
 	t.Chdir(dir)
-	if err := os.WriteFile(filepath.Join(dir, "mfeederd.conf"), []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "mfeeder.conf"), []byte(content), 0644); err != nil {
 		t.Fatalf("write config file: %v", err)
 	}
+
+	t.Setenv("MFEEDER_DATA_DIR", dir)
 }

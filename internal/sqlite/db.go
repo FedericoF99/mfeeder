@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"mfeeder/internal/appdata"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -48,7 +49,12 @@ const schema = `
 `
 
 func Init() (*sql.DB, error) {
-	db, err := sql.Open("sqlite", "mfeeder.db")
+	dbPath, err := appdata.DbFile()
+	if err != nil {
+		return nil, err
+	}
+
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("database init failed: %v", err)
 	}

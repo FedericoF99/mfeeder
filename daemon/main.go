@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"mfeeder/internal/appdata"
 	"mfeeder/internal/config"
 	"mfeeder/internal/shutdown"
 	"mfeeder/internal/sqlite"
@@ -98,13 +99,8 @@ func main() {
 }
 
 func setupLogger() (*os.File, error) {
-	dir, err := os.UserConfigDir()
+	logDir, err := appdata.LogDir()
 	if err != nil {
-		return nil, err
-	}
-
-	logDir := filepath.Join(dir, "mfeeder", "logs")
-	if err = os.MkdirAll(logDir, 0755); err != nil {
 		return nil, err
 	}
 

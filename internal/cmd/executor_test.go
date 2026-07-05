@@ -29,7 +29,7 @@ func TestRunExAddAndRemove(t *testing.T) {
 	if err := runEx(&cmd{opt: map[string]string{"add": "bar"}}); err != nil {
 		t.Fatalf("run ex add: %v", err)
 	}
-	content, err := os.ReadFile("mfeederd.conf")
+	content, err := os.ReadFile("mfeeder.conf")
 	if err != nil {
 		t.Fatalf("read config: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestRunExAddAndRemove(t *testing.T) {
 	if err := runEx(&cmd{opt: map[string]string{"rm": "foo"}}); err != nil {
 		t.Fatalf("run ex rm: %v", err)
 	}
-	content, err = os.ReadFile("mfeederd.conf")
+	content, err = os.ReadFile("mfeeder.conf")
 	if err != nil {
 		t.Fatalf("read config: %v", err)
 	}

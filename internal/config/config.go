@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"mfeeder/internal/appdata"
 	"os"
 	"slices"
 	"strings"
@@ -11,7 +12,6 @@ import (
 
 var (
 	defaultExclusions = "chrome,explorer,WindowsTerminal,ChatGPT,mmc,TrGUI,Codex,ClickUp,Spotify,ApplicationFrameHost,PickerHost"
-	filePath          = "mfeederd.conf"
 )
 
 type Conf struct {
@@ -28,7 +28,12 @@ func (c *Conf) Exclusions() []string {
 
 // LoadConfig loads the config file or creates a default one
 func LoadConfig(ow bool) (*Conf, error) {
-	if _, err := os.Stat(filePath); errors.Is(err, os.ErrNotExist) && ow {
+	filePath, err := appdata.ConfFile()
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err = os.Stat(filePath); errors.Is(err, os.ErrNotExist) && ow {
 		cfg, err := createDefault()
 		if err != nil {
 			return nil, err
@@ -76,11 +81,16 @@ func LoadConfig(ow bool) (*Conf, error) {
 }
 
 func createDefault() (*Conf, error) {
+	filePath, err := appdata.ConfFile()
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := Conf{
 		exclusions: strings.Split(defaultExclusions, ","),
 	}
 
-	err := os.WriteFile(filePath, []byte("EXCLUSIONS="+defaultExclusions+"\n"), 0644)
+	err = os.WriteFile(filePath, []byte("EXCLUSIONS="+defaultExclusions+"\n"), 0644)
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +162,11 @@ func AddExclusion(exc string) error {
 }
 
 func overwriteConf(cfg *Conf) error {
+	filePath, err := appdata.ConfFile()
+	if err != nil {
+		return err
+	}
+
 	file, err := os.ReadFile(filePath)
 	if err != nil {
 		return err

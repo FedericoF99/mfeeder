@@ -46,16 +46,26 @@ func parseCmd(args []string) (*cmd, error) {
 func validateDay(args []string, c *cmd) error {
 	aLen := len(args)
 
-	if aLen > 3 {
+	if aLen > 4 {
 		return fmt.Errorf("unexpected arguments for day command, try: mfeeder --help")
 	}
 
-	if aLen == 3 {
-		if _, err := time.Parse("01-02", args[2]); err != nil {
-			return fmt.Errorf("invalid date format, should be MM-DD")
-		}
+	for i := 2; i < aLen; i++ {
+		if _, err := time.Parse("01-02", args[i]); err == nil {
+			if len(c.args) != 0 {
+				return fmt.Errorf("multiple dates not allowed, try: mfeeder --help")
+			}
 
-		c.args = append(c.args, args[2])
+			c.args = append(c.args, args[i])
+		} else if args[i] == "-e" || args[i] == "-p" {
+			if len(c.opt) != 0 {
+				return fmt.Errorf("multiple flags not allowed, try: mfeeder --help")
+			}
+
+			c.opt[args[i][1:]] = ""
+		} else {
+			return fmt.Errorf("invalid argument %s for day command, try: mfeeder --help", args[i])
+		}
 	}
 
 	c.cmd = "day"
@@ -74,6 +84,9 @@ func validateEx(args []string, c *cmd) error {
 
 	if args[2] != "add" && args[2] != "rm" {
 		return fmt.Errorf("invalid option for ex command, try: mfeeder --help")
+	}
+	if args[3] == "" {
+		return fmt.Errorf("missing argument for ex command, try: mfeeder --help")
 	}
 
 	c.opt[args[2]] = args[3]

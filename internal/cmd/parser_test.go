@@ -14,6 +14,11 @@ func TestParseCmd(t *testing.T) {
 	if err == nil {
 		t.Errorf("parse should fail with invalid command")
 	}
+
+	_, err = parseCmd([]string{"mfeeder", "--help", "extra"})
+	if err == nil {
+		t.Errorf("parse should fail when help receives extra arguments")
+	}
 }
 
 func TestValidateDay(t *testing.T) {
@@ -41,6 +46,26 @@ func TestValidateDay(t *testing.T) {
 
 	if len(c.args) != 1 || c.args[0] != "01-01" {
 		t.Errorf("validateDay should set args to date")
+	}
+}
+
+func TestValidateDayRejectsMultipleDates(t *testing.T) {
+	t.Parallel()
+	c := initCmd()
+
+	err := validateDay([]string{"mfeeder", "day", "01-01", "01-02"}, &c)
+	if err == nil {
+		t.Fatal("validateDay should fail when more than one date is provided")
+	}
+}
+
+func TestValidateDayRejectsConflictingFormats(t *testing.T) {
+	t.Parallel()
+	c := initCmd()
+
+	err := validateDay([]string{"mfeeder", "day", "-e", "-p"}, &c)
+	if err == nil {
+		t.Fatal("validateDay should fail when exe and project formats are both requested")
 	}
 }
 
@@ -77,6 +102,16 @@ func TestValidateEx(t *testing.T) {
 	}
 }
 
+func TestValidateExRejectsEmptyValue(t *testing.T) {
+	t.Parallel()
+	c := initCmd()
+
+	err := validateEx([]string{"mfeeder", "ex", "add", ""}, &c)
+	if err == nil {
+		t.Fatal("validateEx should fail with empty value")
+	}
+}
+
 func TestValidateGet(t *testing.T) {
 	t.Parallel()
 	c := initCmd()
@@ -86,7 +121,7 @@ func TestValidateGet(t *testing.T) {
 		t.Errorf("validateGet should fail with more than 3 args")
 	}
 
-	err = validateGet([]string{"mfeeder", "get", "try"}, &c)
+	err = validateGet([]string{"mfeeder", "get"}, &c)
 	if err == nil {
 		t.Errorf("validateGet should fail with less than 3 args")
 	}

@@ -94,6 +94,9 @@ func enumWindowsCallback(ctx context.Context, c *config.Conf) uintptr {
 		if err != nil {
 			return 1
 		}
+		if isExcluded(hwnd, window, c) {
+			return 1
+		}
 
 		info := (*[]core.Window)(unsafe.Pointer(lParam))
 		*info = append(*info, window)
@@ -160,37 +163,23 @@ func (w *WinWatcher) eventLoop(ch chan<- core.WindowEvent, chRaw <-chan RawWindo
 		select {
 		case raw, ok := <-chRaw:
 			if !ok {
-				println("event loop stopped")
+				log.Println("event loop stopped")
 				return
 			}
 
 			fHwnd := getForegroundHandle()
 			window, err := getWindowInfo(raw.hwnd, fHwnd)
-			if window.Title == "" {
-				continue
-			}
 			if err != nil {
 				continue
 			}
-
-			if slices.Contains(w.Cfg.Exclusions(), window.Exe) {
+			if isExcluded(raw.hwnd, window, w.Cfg) {
 				continue
 			}
 
-			class, err := getClassName(raw.hwnd)
-			if err != nil {
-				continue
-			}
-
-			if slices.Contains(w.Cfg.Exclusions(), class) {
-				continue
-			}
-
-			if err == nil {
-				ch <- core.WindowEvent{
-					Window:      window,
-					WindowEvent: raw.event,
-				}
+			select {
+			case ch <- core.WindowEvent{Window: window, WindowEvent: raw.event}:
+			default:
+				// drop event
 			}
 		}
 	}
@@ -244,7 +233,7 @@ func (w *WinWatcher) winMessageLoop(sdManager *shutdown.Manager, chRaw chan<- Ra
 			return
 		}
 		if ret == 0 {
-			println("message loop stopped")
+			log.Println("message loop stopped")
 			break
 		}
 
@@ -316,4 +305,28 @@ func windowProcCallback(sdManager *shutdown.Manager) uintptr {
 		ret, _, _ := defWindowProcW.Call(hwnd, uintptr(msg), wParam, lParam)
 		return ret
 	})
+}
+
+func isExcluded(hwnd uintptr, window core.Window, cfg *config.Conf) bool {
+	if window.Title == "" {
+		return true
+	}
+
+	exclusions := cfg.Exclusions()
+	if slices.Contains(exclusions, window.Title) {
+		return true
+	}
+	if slices.Contains(exclusions, window.Exe) {
+		return true
+	}
+
+	class, err := getClassName(hwnd)
+	if err != nil {
+		return true
+	}
+	if slices.Contains(exclusions, class) {
+		return true
+	}
+
+	return false
 }

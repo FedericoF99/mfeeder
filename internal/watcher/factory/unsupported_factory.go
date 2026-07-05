@@ -1,4 +1,4 @@
-//go:build !linux && !windows
+//go:build !windows
 
 package factory
 
@@ -10,4 +10,5 @@ import (
 
 func newWatcher(c *config.Conf) core.Watcher {
 	log.Fatal("Unsupported platform")
+	return nil
 }

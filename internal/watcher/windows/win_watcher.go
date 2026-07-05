@@ -163,7 +163,7 @@ func (w *WinWatcher) eventLoop(ch chan<- core.WindowEvent, chRaw <-chan RawWindo
 		select {
 		case raw, ok := <-chRaw:
 			if !ok {
-				println("event loop stopped")
+				log.Println("event loop stopped")
 				return
 			}
 
@@ -233,7 +233,7 @@ func (w *WinWatcher) winMessageLoop(sdManager *shutdown.Manager, chRaw chan<- Ra
 			return
 		}
 		if ret == 0 {
-			println("message loop stopped")
+			log.Println("message loop stopped")
 			break
 		}
 

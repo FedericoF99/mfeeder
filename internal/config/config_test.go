@@ -10,7 +10,7 @@ import (
 )
 
 func TestDefaultConf(t *testing.T) {
-	withConfigPath(t, filepath.Join(t.TempDir(), "mfeederd.conf"))
+	withConfigPath(t, filepath.Join(t.TempDir(), "mfeeder.conf"))
 
 	cfg, err := LoadConfig(true)
 	if err != nil {
@@ -213,7 +213,7 @@ func TestLoadConfigRejectsDuplicateExclusionTokens(t *testing.T) {
 func withConfigContent(t *testing.T, content string) {
 	t.Helper()
 
-	path := filepath.Join(t.TempDir(), "mfeederd.conf")
+	path := filepath.Join(t.TempDir(), "mfeeder.conf")
 	withConfigPath(t, path)
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatalf("write config: %v", err)
@@ -222,10 +222,5 @@ func withConfigContent(t *testing.T, content string) {
 
 func withConfigPath(t *testing.T, path string) {
 	t.Helper()
-
-	previous := filePath
-	filePath = path
-	t.Cleanup(func() {
-		filePath = previous
-	})
+	t.Setenv("MFEEDER_DATA_DIR", filepath.Dir(path))
 }
